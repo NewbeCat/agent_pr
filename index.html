@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Where Do Agent PRs Stall?</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Where Do Agent PRs Stall?</h1>
+      <span id="meta"></span>
+    </header>
+    <main>
+      <section id="v1" class="panel">
+        <h2>Outcome overview <span class="sub">agent vs human</span></h2>
+        <div id="v1-bars"></div>
+        <div class="row">
+          <span class="label">Color:</span>
+          <button class="toggle" data-mode="rate">Rejection rate</button>
+          <button class="toggle" data-mode="count">Number of rejected</button>
+        </div>
+        <div id="v1-heat"></div>
+        <div id="v1-legend"></div>
+      </section>
+
+      <section id="v2" class="panel">
+        <h2>Review flow <span class="sub" id="v2-sel"></span></h2>
+        <div id="v2-flow"></div>
+      </section>
+
+      <section id="resp" class="panel">
+        <h2>
+          Diagnosis → responses
+          <span class="sub" id="resp-sel">click an exit in V2</span>
+        </h2>
+        <div class="resp-body">
+          <div id="resp-cards"></div>
+          <div id="resp-list"></div>
+        </div>
+      </section>
+
+      <section id="v3" class="panel">
+        <h2>Rule tester <span class="sub">effects of rules</span></h2>
+        <div class="row" id="v3-rule"></div>
+        <div class="v3-body">
+          <div id="v3-bars"></div>
+          <div id="v3-scatter"></div>
+        </div>
+        <div id="v3-policy"></div>
+      </section>
+    </main>
+    <div id="tip"></div>
+    <script src="vendor/d3.v7.9.0.min.js"></script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
