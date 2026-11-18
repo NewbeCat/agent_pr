@@ -3,6 +3,7 @@ const d3 = window.d3;
 
 const EXIT_COLOR = { approved: "var(--approved)", maintainer: "var(--maintainer)", stale: "var(--stale)" };
 const BAR_EXITS = ["maintainer", "stale"];
+const FLOW_LABEL = { approved: "approved", maintainer: "rejected · closed by other", stale: "rejected · withdrawn" };
 
 function stageStats(ps) {
   return STAGES.map((s, i) => {
@@ -32,7 +33,7 @@ export function renderV2() {
   const W = root.node().clientWidth, top = 34, spineH = 110;
   const colW = (W - 20) / 3, x = i => 20 + i * colW;
   const k = spineH / ps.length;
-  const leafTop = top + spineH + 40, leafGap = 30;
+  const leafTop = top + spineH + 40, leafGap = 30, exitH = 3 * leafGap - 12;
   const barTop = leafTop + 3 * leafGap + 50, barH = 70;
   const H = barTop + (isHuman ? 0 : barH + 40);
   const svg = root.append("svg").attr("width", W).attr("height", H);
@@ -56,21 +57,28 @@ export function renderV2() {
     if (next && next.reach) svg.append("path").attr("d", band(sx + nodeW, top, top + next.reach * k, x(i + 1), top, top + next.reach * k))
       .attr("fill", "#c9ced4").attr("opacity", .7);
     //exit
-    let yOut = top + (next ? next.reach : 0) * k;
+    let yOut = top + (next ? next.reach : 0) * k, yBar = leafTop;
+    const leaving = EXITS.reduce((a, ex) => a + st.exits[ex], 0);
+    svg.append("rect").attr("x", sx + 40).attr("y", leafTop).attr("width", 8).attr("height", exitH).attr("fill", "none").attr("stroke", "#ccc");
     EXITS.forEach((ex, j) => {
-      const n = st.exits[ex], h = n * k, ly = leafTop + j * leafGap;
+      const n = st.exits[ex], h = n * k, bh = leaving ? exitH * n / leaving : 0, ly = leafTop + j * leafGap;
       const pick = state.exitPick && state.exitPick.stage === st.stage && state.exitPick.exit === ex;
       const g = svg.append("g").style("cursor", n ? "pointer" : "default")
         .on("mousemove", e => showTip(e, exitTip(st, ex, R && R[i])))
         .on("mouseleave", hideTip)
         .on("click", () => n && update({ exitPick: { stage: st.stage, exit: ex } }));
-      if (n) g.append("path").attr("d", band(sx + nodeW, yOut, yOut + h, sx + 40, ly, ly + Math.max(h, 2)))
-        .attr("fill", EXIT_COLOR[ex]).attr("opacity", .55);
-      g.append("rect").attr("x", sx + 40).attr("y", ly).attr("width", 8).attr("height", Math.max(h, 2)).attr("fill", EXIT_COLOR[ex])
-        .attr("stroke", pick ? "var(--select)" : "none").attr("stroke-width", 3);
-      g.append("text").attr("x", sx + 54).attr("y", ly + 9).attr("font-size", 11).attr("font-weight", pick ? 700 : 400)
-        .text(`${EXIT_LABEL[ex]}: ${n} (${pct(n / st.reach)})`);
+      if (n) {
+        g.append("path").attr("d", band(sx + nodeW, yOut, yOut + h, sx + 40, yBar, yBar + bh))
+          .attr("fill", EXIT_COLOR[ex]).attr("opacity", .55);
+        g.append("rect").attr("x", sx + 40).attr("y", yBar).attr("width", 8).attr("height", bh).attr("fill", EXIT_COLOR[ex])
+          .attr("stroke", pick ? "var(--select)" : "none").attr("stroke-width", 3);
+      }
+      g.append("rect").attr("x", sx + 56).attr("y", ly).attr("width", 9).attr("height", 9).attr("fill", n ? EXIT_COLOR[ex] : "#fff").attr("stroke", n ? "none" : "#bbb");
+      g.append("text").attr("x", sx + 70).attr("y", ly + 9).attr("font-size", 11).attr("font-weight", pick ? 700 : 400)
+        .attr("fill", n ? "var(--ink)" : "var(--muted)")
+        .text(`${FLOW_LABEL[ex]}: ${n} (${pct(n / st.reach)})`);
       yOut += h;
+      yBar += bh;
     });
 
     //bottom bars
@@ -88,7 +96,7 @@ export function renderV2() {
           svg.append("text").attr("x", gx + m * (bw + 2) + bw / 2).attr("y", base - ys(v) - 3).attr("text-anchor", "middle").attr("font-size", 10).text(pct(v));
         });
         svg.append("text").attr("x", gx + bw).attr("y", base + 13).attr("text-anchor", "middle").attr("font-size", 10)
-          .text(ex === "maintainer" ? "maint. closed" : "aband./stale");
+          .text(ex === "maintainer" ? "closed by other" : "withdrawn");
       });
     }
   });

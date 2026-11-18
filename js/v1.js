@@ -1,4 +1,4 @@
-import { state, update, AGENTS, TASKS, rowFilter, showTip, hideTip, pct } from "./state.js";
+import { state, update, presentAgents, TASKS, rowFilter, showTip, hideTip, pct } from "./state.js";
 const d3 = window.d3;
 
 const SMALL_N = 5; //too small so make it non-cell
@@ -33,7 +33,7 @@ function drawBars() {
 
 function drawHeat() {
   const root = d3.select("#v1-heat").html("");
-  const rows = ["all", ...(state.v1Expanded ? AGENTS : []), "human"];
+  const rows = ["all", ...(state.v1Expanded ? presentAgents() : []), "human"];
   const W = root.node().clientWidth, L = 100, top = 22, cellH = 36, gapHuman = 10;
   const cw = (W - L) / TASKS.length;
   const H = top + rows.length * cellH + gapHuman + 4;

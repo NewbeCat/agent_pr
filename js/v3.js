@@ -1,4 +1,4 @@
-import { state, update, AGENTS, TASKS, showTip, hideTip, pct, emptyRule } from "./state.js";
+import { state, update, AGENTS, presentAgents, TASKS, showTip, hideTip, pct, emptyRule } from "./state.js";
 import { hasRule, effect, describe, sameRule } from "./rule.js";
 const d3 = window.d3;
 
@@ -68,8 +68,8 @@ function drawPolicy() {
   left.append("div").attr("class", "policy").append("b").text(sentence);
   left.append("p").html(closed
     ? `Tested on ${e.n} past agent PRs: it would have closed <b>${closed}</b> PRs, of which
-       <b style="color:var(--rejected)">${e.blockedRejected}</b> were later rejected (benefit) and
-       <b style="color:#2f6b50">${e.blockedMerged}</b> were later merged (cost, ${pct(e.blockedMerged / closed)} of closed).`
+       <b style="color:#2f6b50">${e.blockedRejected}</b> were later rejected (benefit) and
+       <b style="color:var(--rejected)">${e.blockedMerged}</b> were later merged (cost, ${pct(e.blockedMerged / closed)} of closed).`
     : `Tested on ${e.n} past agent PRs: it would not have closed any PR.`);
   if (closed) left.append("p").html(e.blockedMerged >= e.blockedRejected
     ? `<b>Not recommended as is:</b> it closes at least as many good PRs as bad ones. Try a longer timeout, a narrower segment, or a non-closing response (label for triage).`
@@ -147,9 +147,8 @@ function openAdd(anchor) {
 }
 
 function saveRule() {
-  const e = effect(state.prs, state.rule);
   const id = state.saved.length + 1;
-  update({ saved: [...state.saved, { id, name: `R${id}`, rule: structuredClone(state.rule), cost: e.blockedMerged, benefit: e.blockedRejected }] });
+  update({ saved: [...state.saved, { id, name: `R${id}`, rule: structuredClone(state.rule) }] });
 }
 
 //beforeafter bars
@@ -157,7 +156,7 @@ function drawBars() {
   const root = d3.select("#v3-bars").html("");
   const r = state.rule, on = hasRule(r);
   const agentPRs = state.prs.filter(p => p.group === "agent");
-  const keys = state.v3Cols === "task" ? TASKS : AGENTS;
+  const keys = state.v3Cols === "task" ? TASKS : presentAgents();
   const field = state.v3Cols === "task" ? "task" : "agent";
   const cols = [{ name: "All agent PRs", e: effect(agentPRs, r) },
     ...keys.map(k => ({ name: k === "maintenance" ? "maint." : k, e: effect(agentPRs.filter(p => p[field] === k), r) }))];
@@ -167,7 +166,7 @@ function drawBars() {
   const svg = root.append("svg").attr("width", W).attr("height", H);
 
   const defs = svg.append("defs");
-  [["hatchMerged", "var(--merged)", "#e6f2ec"], ["hatchRejected", "var(--rejected)", "#f7e0e6"]].forEach(([id, fg, bg]) => {
+  [["hatchGood", "var(--merged)", "#e6f2ec"], ["hatchBad", "var(--rejected)", "#f7e0e6"]].forEach(([id, fg, bg]) => {
     const p = defs.append("pattern").attr("id", id).attr("patternUnits", "userSpaceOnUse").attr("width", 6).attr("height", 6)
       .attr("patternTransform", "rotate(45)");
     p.append("rect").attr("width", 6).attr("height", 6).attr("fill", bg);
@@ -180,8 +179,9 @@ function drawBars() {
     const cx = L + i * cw + cw / 2, e = c.e, n = e.n || 1;
     const g = svg.append("g")
       .on("mousemove", ev => showTip(ev, `<b>${c.name}</b> (agent PRs: ${e.n})<br>
-        merged: kept ${e.keptMerged}, blocked ${e.blockedMerged} (cost)<br>
-        rejected: kept ${e.keptRejected}, blocked ${e.blockedRejected} (benefit)`))
+        benefit: ${e.blockedRejected} would-be-rejected PRs blocked<br>
+        cost: ${e.blockedMerged} would-be-merged PRs blocked<br>
+        good outcomes ${e.merged} → ${e.keptMerged + e.blockedRejected} (${e.blockedRejected - e.blockedMerged >= 0 ? "+" : ""}${e.blockedRejected - e.blockedMerged})`))
       .on("mouseleave", hideTip);
     const seg = (x, a, b, fill) => b > a && g.append("rect").attr("x", x).attr("width", bw)
       .attr("y", y(b / n)).attr("height", y(a / n) - y(b / n)).attr("fill", fill);
@@ -190,12 +190,18 @@ function drawBars() {
     seg(bx, e.merged, e.n, "var(--rejected)");
     if (on) {
       const ax = cx + 2;
-      seg(ax, 0, e.keptMerged, "var(--merged-light)");
-      seg(ax, e.keptMerged, e.merged, "url(#hatchMerged)");
-      seg(ax, e.merged, e.merged + e.keptRejected, "var(--rejected)");
-      seg(ax, e.merged + e.keptRejected, e.n, "url(#hatchRejected)");
-      g.append("text").attr("x", cx).attr("y", top - 6).attr("text-anchor", "middle").attr("font-size", 10).attr("fill", "var(--muted)")
-        .text(`−${e.blockedRejected} rej · −${e.blockedMerged} mer`);
+      const k1 = e.keptMerged, k2 = k1 + e.blockedRejected, k3 = k2 + e.blockedMerged;
+      seg(ax, 0, k1, "var(--merged-light)");
+      seg(ax, k1, k2, "url(#hatchGood)");
+      seg(ax, k2, k3, "url(#hatchBad)");
+      seg(ax, k3, e.n, "var(--rejected)");
+      if (e.n) [[bx, e.merged], [ax, k2]].forEach(([xx, v]) => g.append("line")
+        .attr("x1", xx - 2).attr("x2", xx + bw + 2).attr("y1", y(v / n)).attr("y2", y(v / n))
+        .attr("stroke", "#222").attr("stroke-width", 2.5));
+      const net = e.blockedRejected - e.blockedMerged;
+      g.append("text").attr("x", cx).attr("y", top - 6).attr("text-anchor", "middle").attr("font-size", 10)
+        .attr("fill", net > 0 ? "#2f6b50" : net < 0 ? "var(--rejected)" : "var(--muted)")
+        .text(`+${e.blockedRejected} benefit · −${e.blockedMerged} cost`);
       if (i === 0) {
         g.append("text").attr("x", bx + bw / 2).attr("y", H - 6).attr("text-anchor", "middle").attr("font-size", 9).attr("fill", "var(--muted)").text("before");
         g.append("text").attr("x", ax + bw / 2).attr("y", H - 6).attr("text-anchor", "middle").attr("font-size", 9).attr("fill", "var(--muted)").text("after");
@@ -207,11 +213,13 @@ function drawBars() {
 
   //legend
   const lg = svg.append("g").attr("transform", `translate(${L},10)`);
-  [["var(--merged-light)", "merged"], ["url(#hatchMerged)", "blocked · was merged (cost)"],
-   ["var(--rejected)", "rejected"], ["url(#hatchRejected)", "blocked · was rejected (benefit)"]].forEach(([f, t], j) => {
+  [["var(--merged-light)", "merged"], ["url(#hatchGood)", "benefit: blocked, was rejected"],
+   ["url(#hatchBad)", "cost: blocked, was merged"], ["var(--rejected)", "rejected"]].forEach(([f, t], j) => {
     lg.append("rect").attr("x", j * 190).attr("y", -9).attr("width", 12).attr("height", 10).attr("fill", f).attr("stroke", "#999").attr("stroke-width", .5);
     lg.append("text").attr("x", j * 190 + 16).attr("y", 0).attr("font-size", 11).text(t);
   });
+  lg.append("line").attr("x1", 4 * 190).attr("x2", 4 * 190 + 14).attr("y1", -4).attr("y2", -4).attr("stroke", "#222").attr("stroke-width", 2.5);
+  lg.append("text").attr("x", 4 * 190 + 18).attr("y", 0).attr("font-size", 11).text("green / red boundary");
 }
 
 //right scatter
@@ -219,7 +227,10 @@ function drawScatter() {
   const root = d3.select("#v3-scatter").html("");
   const W = 300, H = 250, m = { l: 44, r: 12, t: 22, b: 36 };
   const cur = hasRule(state.rule) ? effect(state.prs, state.rule) : null;
-  const pts = state.saved.map(s => ({ ...s, current: sameRule(s.rule, state.rule) }));
+  const pts = state.saved.map(s => {
+    const e = effect(state.prs, s.rule);
+    return { ...s, cost: e.blockedMerged, benefit: e.blockedRejected, current: sameRule(s.rule, state.rule) };
+  });
   if (cur && !pts.some(p => p.current)) pts.push({ name: "current", rule: state.rule, cost: cur.blockedMerged, benefit: cur.blockedRejected, current: true, unsaved: true });
   const max = Math.max(10, d3.max(pts, p => Math.max(p.cost, p.benefit)) || 0) * 1.1;
   const x = d3.scaleLinear().domain([0, max]).range([m.l, W - m.r]).nice();

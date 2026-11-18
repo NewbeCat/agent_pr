@@ -2,12 +2,14 @@ export const AGENTS = ["Claude Code", "Devin", "Copilot", "Codex", "Cursor"];
 export const TASKS = ["feat", "fix", "refactor", "test", "maintenance", "docs", "other"];
 export const STAGES = ["opened", "feedback", "revised"];
 export const EXITS = ["approved", "maintainer", "stale"];
-export const EXIT_LABEL = { approved: "approved", maintainer: "rejected · maintainer closed", stale: "rejected · abandoned/stale" };
+export const EXIT_LABEL = { approved: "approved", maintainer: "rejected · closed by another person", stale: "rejected · withdrawn (author/bot)" };
 
 export const emptyRule = () => ({ agents: [], tasks: [], minLines: null, noCommitH: null, noRespH: null });
 
 export const state = {
+  allPrs: [],
   prs: [],
+  repo: "all",
   meta: {},
   v1Mode: "rate", // rate or count
   v1Expanded: false,
@@ -23,6 +25,16 @@ export function subscribe(fn) { subs.push(fn); }
 export function update(patch) {
   Object.assign(state, patch);
   subs.forEach(fn => fn(state));
+}
+
+export function presentAgents() {
+  const s = new Set(state.prs.filter(p => p.group === "agent").map(p => p.agent));
+  return AGENTS.filter(a => s.has(a));
+}
+
+export function setRepo(repo) {
+  const prs = repo === "all" ? state.allPrs : state.allPrs.filter(p => p.repo === repo);
+  update({ repo, prs, exitPick: null });
 }
 
 export function rowFilter(row) {

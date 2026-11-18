@@ -17,6 +17,8 @@
 * { box-sizing: border-box; }
 body { margin: 0; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--bg); }
 header { display: flex; align-items: baseline; gap: 16px; padding: 10px 16px; background: #222e49; color: #fff; }
+#repo-pick { margin-left: auto; font-size: 12px; }
+#repo-pick select { font: inherit; margin-left: 6px; padding: 2px 4px; max-width: 360px; }
 header h1 { margin: 0; font-size: 18px; }
 #meta { font-size: 12px; opacity: .75; }
 main {
