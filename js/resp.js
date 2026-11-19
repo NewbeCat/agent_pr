@@ -18,27 +18,38 @@ export function renderResp() {
   d3.select("#resp-sel").text(`${selectionLabel(sel)} · ${stageName(pick.stage)} → ${EXIT_LABEL[pick.exit]} (${list.length} PRs)`);
 
   //left: responses
-  const resp = responsesFor(pick.stage, pick.exit, sel, list);
+  const resp = responsesFor(state.prs, pick.stage, pick.exit, sel, list);
   if (!resp.length) {
     cardsRoot.append("div").attr("class", "label").text(pick.exit === "approved"
       ? "These PRs were merged: nothing to fix here."
       : "Responses are shown for agent selections; Human PRs serve as the reference.");
   } else {
-    cardsRoot.append("div").attr("class", "label").text("Possible responses");
+    cardsRoot.append("div").attr("class", "label").text("Responses");
     const cards = cardsRoot.append("div").attr("class", "cards");
+    const test = rule => () => {
+      update({ rule: structuredClone(rule) });
+      document.getElementById("v3").scrollIntoView({ behavior: "smooth" });
+    };
     resp.forEach(r => {
-      const c = cards.append("div").attr("class", "card");
+      const c = cards.append("div").attr("class", `card ${r.kind}`);
       c.append("b").text(r.title);
-      c.append("p").text(r.why);
-      if (r.rule) c.append("button").attr("class", "primary").text("Test in V3 ↓").on("click", () => {
-        update({ rule: structuredClone(r.rule) });
-        document.getElementById("v3").scrollIntoView({ behavior: "smooth" });
-      });
-      else c.append("span").attr("class", "note").text("recommendation · not testable with this data");
+      if (r.kind === "rec") {
+        c.append("p").html(`Would have closed ${r.j.n} past PRs: <b>${r.j.k}</b> agree with the maintainers (rejected anyway),
+          <b>${r.j.n - r.j.k}</b> overrule them (merged). Catches ${r.j.hit} of ${list.length} PRs here.`);
+        c.append("button").attr("class", "primary").text("Test in V3 ↓").on("click", test(r.rule));
+      } else if (r.kind === "none") {
+        if (r.rule) {
+          c.append("p").text(`Closest: ${r.closestTitle.toLowerCase()}. It ${r.j.fails.join("; ")}.`);
+          c.append("button").text("Test closest in V3 ↓").on("click", test(r.rule));
+        } else c.append("p").text("No candidate rule closes any past PR in this segment.");
+      } else {
+        c.append("p").text(r.why);
+        c.append("span").attr("class", "note").text("advice · not testable with this data");
+      }
     });
   }
 
-  //right: the PRs behind this exit
+  //right: PR behind this exit
   listRoot.append("div").attr("class", "label").text("PRs at this exit");
   const t = listRoot.append("table");
   t.append("tr").html("<th>PR</th><th>agent</th><th>title</th><th>lines</th><th>open (h)</th>");

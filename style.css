@@ -11,7 +11,7 @@
   --ink: #222;
   --muted: #666;
   --line: #ddd;
-  --select: #e8a33d;
+  --select: #222e49;
   --bg: #f5f6f8fe;
 }
 * { box-sizing: border-box; }
@@ -57,8 +57,8 @@ svg text { font-family: inherit; }
 #v3-policy { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 #v3-policy pre { margin: 4px 0 0; background: #f4f5f7; border: 1px solid var(--line); border-radius: 4px; padding: 8px; font-size: 11px; white-space: pre-wrap; max-height: 220px; overflow: auto; }
 #v3-policy .policy { font-size: 13px; }
-#resp-list table { border-collapse: collapse; width: 100%; }
-#resp-list td, #resp-list th { border-bottom: 1px solid #eee; padding: 2px 6px; text-align: left; }
+#resp-list table, #v3-closed table { border-collapse: collapse; width: 100%; }
+#resp-list td, #resp-list th, #v3-closed td, #v3-closed th { border-bottom: 1px solid #eee; padding: 2px 6px; text-align: left; }
 .v3-body { display: flex; gap: 12px; align-items: flex-start; }
 #v3-bars { flex: 1; min-width: 0; }
 #v3-scatter { width: 300px; flex: none; }
@@ -70,3 +70,6 @@ svg text { font-family: inherit; }
   main { grid-template-columns: 1fr; grid-template-areas: "v1" "v2" "resp" "v3"; }
   .v3-body { flex-direction: column; }
 }
+#v3-closed { max-height: 180px; overflow: auto; font-size: 12px; }
+.card.rec { border-left-color: #2f6b50; }
+.card.none { border-left-color: #999; }

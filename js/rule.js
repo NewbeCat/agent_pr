@@ -44,3 +44,40 @@ export function describe(r) {
 }
 
 export const sameRule = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+export const BAR = { minN: 5, minAgree: 0.5, alpha: 0.05, minHit: 0.5 };
+
+export function wilsonLow(k, n, z = 1.96) {
+  if (!n) return 0;
+  const ph = k / n, d = 1 + z * z / n;
+  return (ph + z * z / (2 * n) - z * Math.sqrt(ph * (1 - ph) / n + z * z / (4 * n * n))) / d;
+}
+
+const lnFact = n => { let s = 0; for (let i = 2; i <= n; i++) s += Math.log(i); return s; };
+export function binomTail(k, n, p) {
+  if (k <= 0) return 1;
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  const lnN = lnFact(n);
+  let s = 0, lnI = lnFact(k - 1);
+  for (let i = k; i <= n; i++) {
+    lnI += Math.log(i);
+    s += Math.exp(lnN - lnI - lnFact(n - i) + i * Math.log(p) + (n - i) * Math.log(1 - p));
+  }
+  return Math.min(1, s);
+}
+
+export function judge(prs, r, stall) {
+  const e = effect(prs, r), n = e.blockedRejected + e.blockedMerged, k = e.blockedRejected;
+  const base = e.n ? e.rejected / e.n : 0;
+  const lb = wilsonLow(k, n), p = n ? binomTail(k, n, base) : 1;
+  const hit = stall ? stall.filter(x => blocks(x, r)).length : null;
+  const fails = [];
+  if (n < BAR.minN) fails.push(`closes ${n} past PR${n === 1 ? "" : "s"} (needs ≥ ${BAR.minN})`);
+  else {
+    if (lb <= BAR.minAgree) fails.push(`agrees ${k}/${n}, not confidently more than half (95% lower bound ${Math.round(lb * 100)}%)`);
+    if (p >= BAR.alpha) fails.push(`is no better than closing every agent PR (${Math.round(base * 100)}% are rejected anyway, p = ${p.toFixed(2)})`);
+  }
+  if (stall && hit < BAR.minHit * stall.length) fails.push(`catches ${hit} of ${stall.length} PRs here (needs most)`);
+  return { e, n, k, base, lb, p, hit, fails, ok: !fails.length };
+}

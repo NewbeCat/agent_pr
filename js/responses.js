@@ -1,6 +1,5 @@
 import { emptyRule } from "./state.js";
-
-const DEFAULT_N = 48;
+import { judge } from "./rule.js";
 
 //V1 selection
 function segmentRule(sel) {
@@ -10,47 +9,45 @@ function segmentRule(sel) {
   return r;
 }
 
-const roundUp100 = v => Math.max(100, Math.ceil(v / 100) * 100);
+const GRID = {
+  opened: [...[24, 48, 168].map(h => ({ noRespH: h })), ...[200, 500, 1000, 2000].map(t => ({ minLines: t }))],
+  feedback: [24, 48, 72, 168].map(h => ({ noCommitH: h })),
+  revised: [200, 500, 1000, 2000].map(t => ({ minLines: t })),
+};
 
-export function responsesFor(stage, exit, sel, list) {
-  if (exit === "approved" || sel.row === "human") return [];
+function ruleTitle(who, c) {
+  if (c.noRespH != null) return `Close ${who} PRs with no human response within ${c.noRespH} h`;
+  if (c.noCommitH != null) return `Close ${who} PRs with no new commit within ${c.noCommitH} h after feedback`;
+  return `Close ${who} PRs that change more than ${c.minLines} lines`;
+}
+
+const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+
+export function recommend(prs, stage, sel, list) {
   const seg = segmentRule(sel);
+  const tried = GRID[stage].map(c => {
+    const rule = { ...seg, ...c };
+    return { rule, cond: c, j: judge(prs, rule, list) };
+  }).filter(t => t.j.n > 0);
+  const byReach = (a, b) => b.j.hit - a.j.hit || (b.j.k / b.j.n) - (a.j.k / a.j.n);
+  const pass = tried.filter(t => t.j.ok).sort(byReach);
+  return { best: pass[0] ?? null, closest: pass.length ? null : tried.sort(byReach)[0] ?? null };
+}
+
+export function responsesFor(prs, stage, exit, sel, list) {
+  if (exit === "approved" || sel.row === "human") return [];
   const who = sel.row === "all" ? "agent" : sel.row;
+  const { best, closest } = recommend(prs, stage, sel, list);
+  const out = [];
+  if (best) out.push({ kind: "rec", title: ruleTitle(who, best.cond), j: best.j, rule: best.rule });
+  else out.push({ kind: "none", title: "No rule passes the bar here: leave these to reviewers",
+    j: closest?.j, rule: closest?.rule, closestTitle: closest && ruleTitle(who, closest.cond) });
 
-  if (stage === "opened") return [
-    { title: `Close ${who} PRs nobody responds to within ${DEFAULT_N} h`,
-      why: "These PRs were never reviewed. The bottleneck is maintainer capacity, not the agent; a timeout keeps the queue short.",
-      rule: { ...seg, noRespH: DEFAULT_N } },
-    { title: "Auto-label unreviewed agent PRs for weekly triage",
-      why: "Softer option: nothing is closed, the PRs are batched for one review session instead of interrupting maintainers.",
-      rule: null },
-  ];
-
-  if (stage === "feedback") return [
-    { title: `Close ${who} PRs with no new commit ${DEFAULT_N} h after feedback`,
-      why: "Reviewers asked for changes and nothing came back. A timeout stops maintainers from waiting on PRs that will be abandoned.",
-      rule: { ...seg, noCommitH: DEFAULT_N } },
-    { title: "Turn on the agent's review-comment iteration",
-      why: "Most coding agents can be re-triggered by review comments (e.g., an @-mention). If they respond, these PRs may not need closing at all.",
-      rule: null },
-  ];
-
-  const sizes = list.map(p => p.lines).sort((a, b) => a - b);
-  const median = sizes.length ? sizes[Math.floor(sizes.length / 2)] : 500;
-  const out = [
-    { title: `Cap ${who} PRs at ${roundUp100(median)} changed lines`,
-      why: `Half of these rejected PRs changed more than ${median} lines. Large agent PRs are harder to review and to fix through feedback.`,
-      rule: { ...seg, minLines: roundUp100(median) } },
-  ];
-  if (sel.task) out.push({
-    title: `Stop accepting ${who} PRs for ${sel.task}`,
-    why: "Revision did not save these PRs. If this segment keeps failing, route this task type to people or to another agent instead.",
-    rule: seg,
-  });
-  out.push({
-    title: "Add task-scope guidance to AGENTS.md / CONTRIBUTING.md",
-    why: "State which task types and sizes agent PRs are welcome for, so agents and their operators aim at what gets merged.",
-    rule: null,
-  });
+  if (stage === "opened") out.push({ kind: "advice", title: "Say which agent PRs are welcome (CONTRIBUTING.md / AGENTS.md)",
+    why: `These closed after a median of ${Math.round(median(list.map(p => p.closeH)))} h with no human comment: unwanted rather than unseen.` });
+  else if (stage === "feedback") out.push({ kind: "advice", title: "Turn on the agent's review-comment iteration",
+    why: "Most agents can be re-triggered by a review comment, so feedback can turn into a revision." });
+  else out.push({ kind: "advice", title: "Ask for smaller, single-purpose agent PRs",
+    why: `Revised and still rejected; median size ${median(list.map(p => p.lines))} lines.` });
   return out;
 }
